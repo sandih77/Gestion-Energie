@@ -1,8 +1,8 @@
 # Input
-Appareil        Temps           Fotoana            puissance            Total(temps * puissance)
+Appareil        Temps           Période            puissance            Total(temps * puissance)
 PC              2h(9h - 11h)              AM                 50W                  100W
 
-# Fotoana 
+# Période 
 Matin : 6h -> 17h
 FA : 17h -> 19h
 Soirée : 19h -> 6h
