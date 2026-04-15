@@ -29,6 +29,13 @@ class EnergieCalculator:
         return hours * 60 + minutes
 
     @staticmethod
+    def _minutes_to_hhmm(total_minutes):
+        minutes = int(total_minutes) % 1440
+        hours = minutes // 60
+        mins = minutes % 60
+        return f"{hours:02d}:{mins:02d}"
+
+    @staticmethod
     def _normalize_percentage(value, default):
         try:
             if value is None:
@@ -87,7 +94,37 @@ class EnergieCalculator:
         return round(total_wh, 2)
 
     @staticmethod
-    def _window_peak_power_w(utilisations, window_start, window_end):
+    def _window_covered_minutes(utilisations, window_start, window_end):
+        intervals = []
+
+        for utilisation in utilisations:
+            start_min = EnergieCalculator._time_to_minutes(utilisation.heure_debut)
+            end_min = EnergieCalculator._time_to_minutes(utilisation.heure_fin)
+
+            for usage_start, usage_end in EnergieCalculator._split_interval(start_min, end_min):
+                for window_segment_start, window_segment_end in EnergieCalculator._window_segments(window_start, window_end):
+                    overlap_start = max(usage_start, window_segment_start)
+                    overlap_end = min(usage_end, window_segment_end)
+                    if overlap_start < overlap_end:
+                        intervals.append((overlap_start, overlap_end))
+
+        if not intervals:
+            return 0
+
+        intervals.sort(key=lambda item: item[0])
+        merged = [intervals[0]]
+
+        for current_start, current_end in intervals[1:]:
+            last_start, last_end = merged[-1]
+            if current_start <= last_end:
+                merged[-1] = (last_start, max(last_end, current_end))
+            else:
+                merged.append((current_start, current_end))
+
+        return sum(end - start for start, end in merged)
+
+    @staticmethod
+    def _window_peak_power_w(utilisations, window_start, window_end, extra_loads=None):
         events = []
 
         for utilisation in utilisations:
@@ -105,6 +142,19 @@ class EnergieCalculator:
                     if overlap_start < overlap_end:
                         events.append((overlap_start, power_w))
                         events.append((overlap_end, -power_w))
+
+        for load in (extra_loads or []):
+            load_start, load_end, load_power = load
+            if load_power <= 0:
+                continue
+
+            for usage_start, usage_end in EnergieCalculator._split_interval(load_start, load_end):
+                for window_segment_start, window_segment_end in EnergieCalculator._window_segments(window_start, window_end):
+                    overlap_start = max(usage_start, window_segment_start)
+                    overlap_end = min(usage_end, window_segment_end)
+                    if overlap_start < overlap_end:
+                        events.append((overlap_start, load_power))
+                        events.append((overlap_end, -load_power))
 
         if not events:
             return 0.0
@@ -151,15 +201,33 @@ class EnergieCalculator:
             EnergieCalculator.SOIREE_WINDOW[1],
         )
 
+        soiree_usage_minutes = EnergieCalculator._window_covered_minutes(
+            utilisations,
+            EnergieCalculator.SOIREE_WINDOW[0],
+            EnergieCalculator.SOIREE_WINDOW[1],
+        )
+        soiree_usage_hours = round(soiree_usage_minutes / 60.0, 2)
+        battery_charge_power_w = round(battery_theoretical_wh / soiree_usage_hours, 2) if soiree_usage_hours > 0 else 0.0
+
+        battery_charge_start_min = 6 * 60
+        battery_charge_end_min = battery_charge_start_min + soiree_usage_minutes
+        battery_charge_loads = []
+        if battery_charge_power_w > 0 and soiree_usage_minutes > 0:
+            battery_charge_loads.append(
+                (battery_charge_start_min, battery_charge_end_min, battery_charge_power_w)
+            )
+
         panel_morning_theoretical_w = EnergieCalculator._window_peak_power_w(
             utilisations,
             EnergieCalculator.MATIN_WINDOW[0],
             EnergieCalculator.MATIN_WINDOW[1],
+            extra_loads=battery_charge_loads,
         )
         panel_fa_theoretical_w = EnergieCalculator._window_peak_power_w(
             utilisations,
             EnergieCalculator.FA_WINDOW[0],
             EnergieCalculator.FA_WINDOW[1],
+            extra_loads=battery_charge_loads,
         )
 
         matin_yield = max(EnergieCalculator._normalize_percentage(matin_yield_pct, 40.0), 0.0)
@@ -167,7 +235,8 @@ class EnergieCalculator:
         battery_margin = max(EnergieCalculator._normalize_percentage(battery_margin_pct, 50.0), 0.0)
 
         panel_morning_practical_w = round(panel_morning_theoretical_w / (matin_yield / 100.0), 2) if matin_yield > 0 else 0.0
-        panel_fa_practical_w = round(panel_fa_theoretical_w / (matin_yield / 100.0) / (fa_yield / 100), 2) if fa_yield > 0 else 0.0
+        panel_fa_practical_w = round(panel_fa_theoretical_w / (fa_yield / 100.0), 2) if fa_yield > 0 else 0.0
+        battery_charge_practical_w = round(battery_charge_power_w / (matin_yield / 100.0), 2) if matin_yield > 0 else 0.0
 
         panel_required_w = round(max(panel_morning_practical_w, panel_fa_practical_w), 2)
         battery_practical_wh = round(battery_theoretical_wh * (1.0 + battery_margin / 100.0), 2)
@@ -176,6 +245,11 @@ class EnergieCalculator:
             "battery_theoretical_wh": battery_theoretical_wh,
             "battery_practical_wh": battery_practical_wh,
             "battery_margin_pct": battery_margin,
+            "soiree_usage_hours": soiree_usage_hours,
+            "battery_charge_start": EnergieCalculator._minutes_to_hhmm(battery_charge_start_min),
+            "battery_charge_end": EnergieCalculator._minutes_to_hhmm(battery_charge_end_min),
+            "battery_charge_power_w": battery_charge_power_w,
+            "battery_charge_practical_w": battery_charge_practical_w,
             "panel_morning_theoretical_w": panel_morning_theoretical_w,
             "panel_morning_practical_w": panel_morning_practical_w,
             "panel_fa_theoretical_w": panel_fa_theoretical_w,

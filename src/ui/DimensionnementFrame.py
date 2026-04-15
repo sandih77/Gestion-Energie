@@ -42,6 +42,11 @@ class DimensionnementFrame(ttk.Frame):
         rows = [
             ("Batterie théorique", "battery_theoretical_wh", "Wh"),
             ("Batterie pratique", "battery_practical_wh", "Wh"),
+            ("Temps utilisation soirée", "soiree_usage_hours", "h"),
+            ("Début charge batterie", "battery_charge_start", ""),
+            ("Fin charge batterie", "battery_charge_end", ""),
+            ("Puissance charge batterie", "battery_charge_power_w", "W"),
+            ("Puissance charge batterie pratique", "battery_charge_practical_w", "W"),
             ("Panneau matin théorique", "panel_morning_theoretical_w", "W"),
             ("Panneau matin pratique", "panel_morning_practical_w", "W"),
             ("Panneau FA théorique", "panel_fa_theoretical_w", "W"),
@@ -85,6 +90,11 @@ class DimensionnementFrame(ttk.Frame):
 
         self.result_vars["battery_theoretical_wh"].set(f"{results['battery_theoretical_wh']:.2f}")
         self.result_vars["battery_practical_wh"].set(f"{results['battery_practical_wh']:.2f}")
+        self.result_vars["soiree_usage_hours"].set(f"{results['soiree_usage_hours']:.2f}")
+        self.result_vars["battery_charge_start"].set(results["battery_charge_start"])
+        self.result_vars["battery_charge_end"].set(results["battery_charge_end"])
+        self.result_vars["battery_charge_power_w"].set(f"{results['battery_charge_power_w']:.2f}")
+        self.result_vars["battery_charge_practical_w"].set(f"{results['battery_charge_practical_w']:.2f}")
         self.result_vars["panel_morning_theoretical_w"].set(f"{results['panel_morning_theoretical_w']:.2f}")
         self.result_vars["panel_morning_practical_w"].set(f"{results['panel_morning_practical_w']:.2f}")
         self.result_vars["panel_fa_theoretical_w"].set(f"{results['panel_fa_theoretical_w']:.2f}")
