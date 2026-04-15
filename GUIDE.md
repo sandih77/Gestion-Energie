@@ -58,9 +58,9 @@ self.pwd = "Sqlserver123!"         # Mot de passe
 python src/Main.py
 ```
 
-### Interface Tkinter
+## Interface Tkinter
 
-L'application propose 3 onglets :
+L'application propose 4 onglets :
 
 #### **Onglet Appareils**
 - Ajouter un nouvel appareil avec son nom et sa puissance (W)
@@ -78,9 +78,16 @@ L'application propose 3 onglets :
 - Supprimer une période
 
 #### **Onglet Utilisations**
-- Lier un appareil à une période
-- Définir l'heure d'utilisation et la durée
+- Choisir l'appareil et saisir seulement l'heure de début et de fin
+- Découper automatiquement l'utilisation selon les périodes (Matin, FA, Soirée, etc.)
+- Calculer automatiquement la durée de chaque ligne créée
 - Modifier ou supprimer les utilisations
+
+#### **Onglet Dimensionnement**
+- Calculer la puissance batterie théorique et pratique en Wh
+- Calculer la puissance panneau solaire théorique et pratique en W
+- Ajuster les coefficients de rendement du matin, de la FA et la marge pratique de batterie
+- Recalculer automatiquement les résultats à partir des données en base
 
 ## CRUD - Modèles
 
@@ -196,44 +203,11 @@ for util in utilisations:
 
 ## Calculs d'Énergie
 
-### À Implémenter
+La classe [EnergieCalculator.py](src/model/EnergieCalculator.py) fournit les calculs de dimensionnement suivants :
 
-Créez une classe `EnergyCalculator` pour calculer :
-
-```python
-from model.Materiel import Appareil
-from model.Periode import Periode
-from model.Utilisation import Utilisation
-
-class EnergyCalculator:
-    
-    @staticmethod
-    def calculate_daily_usage():
-        """Calcul de la consommation quotidienne"""
-        utilisations = Utilisation.get_all()
-        total_wh = 0
-        
-        for util in utilisations:
-            appareil = Appareil.get_by_id(util.appareil_id)
-            energie = appareil.puissance_w * util.duree_heures
-            total_wh += energie
-        
-        return total_wh
-
-    @staticmethod
-    def calculate_solar_panel_needed():
-        """Calcul de la puissance panneau solaire nécessaire"""
-        # Matin: 40% rendement
-        # FA: 20% rendement (50% de 40%)
-        # Soirée: batterie uniquement
-        pass
-
-    @staticmethod
-    def calculate_battery_capacity_needed():
-        """Calcul de la capacité batterie nécessaire"""
-        # Batterie pour la période de nuit (19h-6h)
-        pass
-```
+- `EnergieCalculator.get_default_parameters()` : charge les coefficients par défaut depuis les périodes en base
+- `EnergieCalculator.calculate_dimensionnement(...)` : retourne les valeurs théoriques et pratiques de la batterie et du panneau solaire
+- La batterie couvre la période du soir et de la nuit, tandis que le panneau couvre le matin et la FA
 
 ## Fichiers Importants
 
