@@ -201,11 +201,17 @@ class EnergieCalculator:
             EnergieCalculator.SOIREE_WINDOW[1],
         )
 
-        soiree_usage_minutes = EnergieCalculator._window_covered_minutes(
-            utilisations,
-            EnergieCalculator.SOIREE_WINDOW[0],
-            EnergieCalculator.SOIREE_WINDOW[1],
-        )
+        charge_start = EnergieCalculator.MATIN_WINDOW[0]   # 6h
+        charge_end = EnergieCalculator.FA_WINDOW[1]        # 19h
+
+        soiree_usage_minutes = charge_end - charge_start
+
+        # soiree_usage_minutes = EnergieCalculator._window_covered_minutes(
+        #     utilisations,
+        #     EnergieCalculator.SOIREE_WINDOW[0],
+        #     EnergieCalculator.SOIREE_WINDOW[1],
+        # )
+        
         soiree_usage_hours = round(soiree_usage_minutes / 60.0, 2)
         battery_charge_power_w = round(battery_theoretical_wh / soiree_usage_hours, 2) if soiree_usage_hours > 0 else 0.0
 
