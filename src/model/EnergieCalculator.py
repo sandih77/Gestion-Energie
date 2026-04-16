@@ -192,7 +192,7 @@ class EnergieCalculator:
         }
 
     @staticmethod
-    def calculate_dimensionnement(matin_yield_pct=40.0, fa_yield_pct=20.0, battery_margin_pct=50.0):
+    def _calculate_common_data():
         utilisations = Utilisation.get_all()
 
         battery_theoretical_wh = EnergieCalculator._window_energy_wh(
@@ -201,26 +201,42 @@ class EnergieCalculator:
             EnergieCalculator.SOIREE_WINDOW[1],
         )
 
-        charge_start = EnergieCalculator.MATIN_WINDOW[0]   # 6h
-        charge_end = EnergieCalculator.FA_WINDOW[1]        # 19h
+        charge_start = EnergieCalculator.MATIN_WINDOW[0]
+        charge_end = EnergieCalculator.FA_WINDOW[1]
 
-        soiree_usage_minutes = charge_end - charge_start
+        matin_minutes = EnergieCalculator._overlap_minutes(
+            charge_start,
+            charge_end,
+            EnergieCalculator.MATIN_WINDOW[0],
+            EnergieCalculator.MATIN_WINDOW[1],
+        )
+        fa_minutes = EnergieCalculator._overlap_minutes(
+            charge_start,
+            charge_end,
+            EnergieCalculator.FA_WINDOW[0],
+            EnergieCalculator.FA_WINDOW[1],
+        )
 
-        # soiree_usage_minutes = EnergieCalculator._window_covered_minutes(
-        #     utilisations,
-        #     EnergieCalculator.SOIREE_WINDOW[0],
-        #     EnergieCalculator.SOIREE_WINDOW[1],
-        # )
-        
-        soiree_usage_hours = round(soiree_usage_minutes / 60.0, 2)
-        battery_charge_power_w = round(battery_theoretical_wh / soiree_usage_hours, 2) if soiree_usage_hours > 0 else 0.0
+        # Batterie: en FA elle charge a 50% de la puissance matin.
+        heures_equivalentes_charge = (matin_minutes / 60.0) + ((fa_minutes / 60.0) * 0.5)
+        soiree_usage_hours = round(heures_equivalentes_charge, 2)
+        battery_charge_power_w = (
+            round(battery_theoretical_wh / heures_equivalentes_charge, 2)
+            if heures_equivalentes_charge > 0
+            else 0.0
+        )
+        battery_charge_power_fa_w = round(battery_charge_power_w * 0.5, 2)
 
-        battery_charge_start_min = 6 * 60
-        battery_charge_end_min = battery_charge_start_min + soiree_usage_minutes
+        battery_charge_start_min = charge_start
+        battery_charge_end_min = charge_end
         battery_charge_loads = []
-        if battery_charge_power_w > 0 and soiree_usage_minutes > 0:
+        if battery_charge_power_w > 0 and matin_minutes > 0:
             battery_charge_loads.append(
-                (battery_charge_start_min, battery_charge_end_min, battery_charge_power_w)
+                (EnergieCalculator.MATIN_WINDOW[0], EnergieCalculator.MATIN_WINDOW[1], battery_charge_power_w)
+            )
+        if battery_charge_power_fa_w > 0 and fa_minutes > 0:
+            battery_charge_loads.append(
+                (EnergieCalculator.FA_WINDOW[0], EnergieCalculator.FA_WINDOW[1], battery_charge_power_fa_w)
             )
 
         panel_morning_theoretical_w = EnergieCalculator._window_peak_power_w(
@@ -229,6 +245,7 @@ class EnergieCalculator:
             EnergieCalculator.MATIN_WINDOW[1],
             extra_loads=battery_charge_loads,
         )
+
         panel_fa_theoretical_w = EnergieCalculator._window_peak_power_w(
             utilisations,
             EnergieCalculator.FA_WINDOW[0],
@@ -236,24 +253,86 @@ class EnergieCalculator:
             extra_loads=battery_charge_loads,
         )
 
+        pic_matin_appareils_w = EnergieCalculator._window_peak_power_w(
+            utilisations,
+            EnergieCalculator.MATIN_WINDOW[0],
+            EnergieCalculator.MATIN_WINDOW[1],
+        )
+
+        pic_fa_appareils_w = EnergieCalculator._window_peak_power_w(
+            utilisations,
+            EnergieCalculator.FA_WINDOW[0],
+            EnergieCalculator.FA_WINDOW[1],
+        )
+
+        pic_soiree_appareils_w = EnergieCalculator._window_peak_power_w(
+            utilisations,
+            EnergieCalculator.SOIREE_WINDOW[0],
+            EnergieCalculator.SOIREE_WINDOW[1],
+        )
+
+        print(panel_fa_theoretical_w / (40.0 / 100.0) / (50.0 / 100.0))
+
+        # Le convertisseur est commun: base sur le pic de puissance theorique du panneau.
+        pic_matin_w = panel_morning_theoretical_w
+        pic_fa_w = panel_fa_theoretical_w
+        # Pas de production panneau en soiree.
+        pic_soiree_w = 0.0
+        puissance_pic_journee_w = round(max(pic_matin_w, pic_fa_w, pic_soiree_w), 2)
+        puissance_convertisseur_w = round(puissance_pic_journee_w * 2.0, 2)
+
+        puissance_pic_journee_appareils_w = round(
+            max(pic_matin_appareils_w, pic_fa_appareils_w, pic_soiree_appareils_w),
+            2,
+        )
+        puissance_convertisseur_appareils_w = round(puissance_pic_journee_appareils_w * 2.0, 2)
+
+        return {
+            "battery_theoretical_wh": battery_theoretical_wh,
+            "soiree_usage_hours": soiree_usage_hours,
+            "battery_charge_start": EnergieCalculator._minutes_to_hhmm(battery_charge_start_min),
+            "battery_charge_end": EnergieCalculator._minutes_to_hhmm(battery_charge_end_min),
+            "battery_charge_power_w": battery_charge_power_w,
+            "panel_morning_theoretical_w": panel_morning_theoretical_w,
+            "panel_fa_theoretical_w": panel_fa_theoretical_w,
+            "pic_matin_w": pic_matin_w,
+            "pic_fa_w": pic_fa_w,
+            "pic_soiree_w": pic_soiree_w,
+            "puissance_pic_journee_w": puissance_pic_journee_w,
+            "puissance_convertisseur_w": puissance_convertisseur_w,
+            "puissance_convertisseur_appareils_w": puissance_convertisseur_appareils_w,
+        }
+
+    @staticmethod
+    def calculate_dimensionnement(matin_yield_pct=40.0, fa_yield_pct=20.0, battery_margin_pct=50.0, common_data=None):
+        donnees = common_data or EnergieCalculator._calculate_common_data()
+
+        battery_theoretical_wh = donnees["battery_theoretical_wh"]
+        soiree_usage_hours = donnees["soiree_usage_hours"]
+        battery_charge_power_w = donnees["battery_charge_power_w"]
+        panel_morning_theoretical_w = donnees["panel_morning_theoretical_w"]
+        panel_fa_theoretical_w = donnees["panel_fa_theoretical_w"]
+
         matin_yield = max(EnergieCalculator._normalize_percentage(matin_yield_pct, 40.0), 0.0)
         fa_yield = max(EnergieCalculator._normalize_percentage(fa_yield_pct, 20.0), 0.0)
         battery_margin = max(EnergieCalculator._normalize_percentage(battery_margin_pct, 50.0), 0.0)
 
         panel_morning_practical_w = round(panel_morning_theoretical_w / (matin_yield / 100.0), 2) if matin_yield > 0 else 0.0
-        panel_fa_practical_w = round(panel_fa_theoretical_w / (fa_yield / 100.0), 2) if fa_yield > 0 else 0.0
+        panel_fa_practical_w = round(panel_fa_theoretical_w / (fa_yield / 100.0) / (matin_yield / 100.0), 2) if fa_yield > 0 else 0.0
+        print(panel_fa_practical_w)
         battery_charge_practical_w = round(battery_charge_power_w / (matin_yield / 100.0), 2) if matin_yield > 0 else 0.0
 
         panel_required_w = round(max(panel_morning_practical_w, panel_fa_practical_w), 2)
         battery_practical_wh = round(battery_theoretical_wh * (1.0 + battery_margin / 100.0), 2)
+        # battery_practical_wh = round(battery_theoretical_wh / (battery_margin / 100.0), 2)
 
         return {
             "battery_theoretical_wh": battery_theoretical_wh,
             "battery_practical_wh": battery_practical_wh,
             "battery_margin_pct": battery_margin,
             "soiree_usage_hours": soiree_usage_hours,
-            "battery_charge_start": EnergieCalculator._minutes_to_hhmm(battery_charge_start_min),
-            "battery_charge_end": EnergieCalculator._minutes_to_hhmm(battery_charge_end_min),
+            "battery_charge_start": donnees["battery_charge_start"],
+            "battery_charge_end": donnees["battery_charge_end"],
             "battery_charge_power_w": battery_charge_power_w,
             "battery_charge_practical_w": battery_charge_practical_w,
             "panel_morning_theoretical_w": panel_morning_theoretical_w,
@@ -263,6 +342,43 @@ class EnergieCalculator:
             "panel_required_w": panel_required_w,
             "matin_yield_pct": matin_yield,
             "fa_yield_pct": fa_yield,
+        }
+
+    @staticmethod
+    def calculate_dimensionnement_double(
+        p1_matin_yield_pct,
+        p1_fa_yield_pct,
+        p1_battery_margin_pct,
+        p2_matin_yield_pct,
+        p2_fa_yield_pct,
+        p2_battery_margin_pct,
+    ):
+        commun = EnergieCalculator._calculate_common_data()
+
+        p1 = EnergieCalculator.calculate_dimensionnement(
+            p1_matin_yield_pct,
+            p1_fa_yield_pct,
+            p1_battery_margin_pct,
+            common_data=commun,
+        )
+        p2 = EnergieCalculator.calculate_dimensionnement(
+            p2_matin_yield_pct,
+            p2_fa_yield_pct,
+            p2_battery_margin_pct,
+            common_data=commun,
+        )
+
+        return {
+            "p1": p1,
+            "p2": p2,
+            "commun": {
+                "pic_matin_w": commun["pic_matin_w"],
+                "pic_fa_w": commun["pic_fa_w"],
+                "pic_soiree_w": commun["pic_soiree_w"],
+                "puissance_pic_journee_w": commun["puissance_pic_journee_w"],
+                "puissance_convertisseur_w": commun["puissance_convertisseur_w"],
+                "puissance_convertisseur_appareils_w": commun["puissance_convertisseur_appareils_w"],
+            },
         }
 
 

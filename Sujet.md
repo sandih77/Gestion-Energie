@@ -34,3 +34,14 @@ Soirée : 19h -> 6h
     - donc il faut tenir compte de la réduction de puissance pendant la fin d'après-midi à cause de l absence du soleil
     - Dans cette calcul, il y a aussi de cas théorique et pratique, genre le panneau ne fourni que 40%(variable) donc il faut ajouter 40% au cas théorique. Cette logique concerne le matin et la fin d'après-midi
 - Ajouter une nouvelle onglet dans l'interface pour afficher la puissance théorique et pratique du batterie et panneau solaire 
+
+Ajoutons une convertisseur
+Donc il faut trouver la puissance pic durant la journée(matin, fa, soirée)
+donc la puissance de la convertisseur est la puissance pic * 2
+
+dans le dimensionnement on va dire que tous ces réglages sont pour panneau p1
+Ajoutons les meme réglages mais juste pour panneau P2
+
+Donc le système propose 2 Résultats celle qui vient du réglage de P1 et P2
+
+La convertisseur concerne les deux donc il faut afficher aussi la puissance du convertisseur
